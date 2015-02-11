@@ -8,7 +8,7 @@ To build it locally (of course, CMake is required here).
 
 	cmake . && make
 
-To configure it (mainly the `DEBUG` option).
+To configure the build (mainly the `DEBUG` option).
 
 	ccmake .
 
@@ -95,7 +95,7 @@ Test it with `dig`, `nslookup`.
 
 ## TODO
 
-- A list of domain names from brower history for testing purposes.
+- A list of domain names from browser history for testing purposes.
 - Workaround the issue with `8.8.8.8`.
 
 	- Add a global staging area for requests that cannot be served immediately.
