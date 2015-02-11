@@ -1,5 +1,7 @@
 `utdnsd`, a DNS forwarder serving requests from UDP clients by delegating them to upstream DNS servers with TCP.  The idea is from `ttdnsd` of Tor Project.
 
+OpenWrt package definition files can be found at [waller repository](https://github.com/yousong/waller); detailed instructions of how to import them should be included there.
+
 ## Build
 
 [`libubox`](http://git.openwrt.org/?p=project/libubox.git;a=summary) from OpenWrt project is required.  On Mac OS X with MacPorts installed, you can get `libubox` installed by using portfiles from [macports-openwrt repository](https://github.com/yousong/macports-openwrt).
