@@ -711,6 +711,7 @@ int main(int argc, char *argv[])
 
 	info("start serving!\n");
 	uloop_run();
+	uloop_done();
 	return 0;
 }
 
