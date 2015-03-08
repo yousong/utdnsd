@@ -428,7 +428,7 @@ static void cb_udpsock_writable(int udpsock)
 
 static void cb_uloop_udpsock(struct uloop_fd *fd, unsigned int events)
 {
-	int udpsock;
+	int udpsockfd;
 
 	if (fd->error) {
 		error("UDP sock error occured.\n");
@@ -440,18 +440,27 @@ static void cb_uloop_udpsock(struct uloop_fd *fd, unsigned int events)
 		exit(EXIT_FAILURE);
 	}
 
-	udpsock = fd->fd;
+	udpsockfd = fd->fd;
 	if (events & ULOOP_WRITE) {
-		cb_udpsock_writable(udpsock);
+		cb_udpsock_writable(udpsockfd);
 	}
 	if (events & ULOOP_READ) {
-		cb_udpsock_readable(udpsock);
+		cb_udpsock_readable(udpsockfd);
+	}
+	if (list_empty(&list_dnssession_done)) {
+		/* write out responses */
+		uloop_fd_add(&udpsock, ULOOP_READ | ULOOP_ERROR_CB);
 	}
 }
 
 static void tcpsock_notify_read(struct ustream *s, int bytes)
 {
 	while (readresp(s)) ;
+
+	if (!list_empty(&list_dnssession_done)) {
+		/* write out responses */
+		uloop_fd_add(&udpsock, ULOOP_READ | ULOOP_WRITE | ULOOP_ERROR_CB);
+	}
 }
 
 static void tcpsock_notify_write(struct ustream *s, int bytes)
@@ -530,7 +539,7 @@ static void init_udpsock(char *saddrport)
 	}
 	udpsock.fd = fd;
 	udpsock.cb = cb_uloop_udpsock;
-	uloop_fd_add(&udpsock, ULOOP_READ | ULOOP_WRITE | ULOOP_ERROR_CB);
+	uloop_fd_add(&udpsock, ULOOP_READ | ULOOP_ERROR_CB);
 }
 
 static int init_tcpsock(struct tcpsock *tcpsock, char *saddrport)
