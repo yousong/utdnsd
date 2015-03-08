@@ -124,4 +124,7 @@ Test it with `dig`, `nslookup`.
 - dnsperf, http://nominum.com/measurement-tools/
 - DNS benchmark tool for Windows, https://www.grc.com/dns/benchmark.htm
 - Public DNS Server List, http://public-dns.tk/
-
+- Public DNS services
+	- Google DNS
+	- OpenDNS
+	- V2EX DNS, https://v2ex.com/go/dns
