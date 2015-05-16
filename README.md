@@ -91,7 +91,8 @@ If you have got a long list of usable DNS servers and in a decidophobia as to wh
 
 Test it with `dig`, `nslookup`.
 
-	dig -p 8053 @127.0.0.1 www.openvpn.net
+	# use +short for returning only IP adresses.
+	dig +noshort -p 8053 @127.0.0.1 www.openvpn.net
 	nslookup www.openvpn.net 127.0.0.1 -port=8053
 	nslookup www.openvpn.net 127.0.0.1:8053
 
