@@ -214,7 +214,7 @@ static uint64_t tcpsock_estimate_threshold(struct tcpsock *tcpsock)
 	return tcp_shoddy_threshold * (tcpsock->nsess + 1);
 }
 
-static void staging_dnssession(struct dnssession *sess)
+static int staging_dnssession(struct dnssession *sess)
 {
 	struct tcpsock *ans = NULL;
 	uint64_t estimate = ~(uint64_t)0;
@@ -240,12 +240,13 @@ static void staging_dnssession(struct dnssession *sess)
 
 	if (!ans) {
 		error("no usable TCP server!\n");
-		return;
+		return -1;
 	}
 
 	writereq(&ans->ufd.stream, sess);
 	list_add_tail(&sess->list, &ans->list);
 	ans->nsess += 1;
+	return 0;
 }
 
 static struct dnssession *readreq(int udpsock)
@@ -283,7 +284,6 @@ static struct dnssession *readreq(int udpsock)
 		sess->reqlen = msglen;
 		sess->reqid = dnsmsg_get_id(buf, msglen);
 		gettime(&sess->arrival_time);
-		staging_dnssession(sess);
 		debug("got valid request.\n");
 		return sess;
 	}
@@ -408,7 +408,17 @@ static int writeresp(int udpsock, struct dnssession *sess)
 
 static void cb_udpsock_readable(int udpsock)
 {
-	readreq(udpsock);
+	struct dnssession *sess;
+
+	while ((sess = readreq(udpsock))) {
+		/* staging succeeded */
+		if (staging_dnssession(sess) == 0)
+			continue;
+
+		/* no usable tcp server. quit reading more. */
+		free(sess);
+		break;
+	}
 }
 
 static void cb_udpsock_writable(int udpsock)
