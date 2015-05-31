@@ -104,8 +104,8 @@ struct tcpsock {
 const char *progname;
 int quiet;
 struct tcpsock tcpsocks[NSERVERS];
-int ntcpsocks;
-int shoddy_tcpsocks;
+int num_tcpsocks;
+int num_tcpsocks_shoddy;
 
 struct uloop_fd udpsock;
 LIST_HEAD(list_dnssession_done);
@@ -113,8 +113,8 @@ LIST_HEAD(list_dnssession_done);
 int max_reconnect_delay = TCP_RECONNECT_DELAY;
 uint64_t tcp_shoddy_threshold = TCP_SHODDY_THRESHOLD;
 
-static int init_tcpsock(struct tcpsock *tcpsock, char *saddrport);
-static void reinit_tcpsock(struct tcpsock *tcpsock, int state);
+static int tcpsock_init(struct tcpsock *tcpsock, char *saddrport);
+static void tcpsock_refresh(struct tcpsock *tcpsock, int state);
 static void writereq(struct ustream *s, struct dnssession *sess);
 
 #ifdef DEBUG
@@ -137,7 +137,7 @@ static void fill_dnsaddr(const char *saddrport, char **saddr, char **sport)
 {
 	*saddr = strdup(saddrport);
 	if (!*saddr) {
-		error("Allocating memory for address port failed.\n");
+		error("allocating memory for address port failed.\n");
 		exit(EXIT_FAILURE);
 	}
 	*sport = strchr(*saddr, ':');
@@ -150,17 +150,17 @@ static void fill_dnsaddr(const char *saddrport, char **saddr, char **sport)
 	}
 }
 
-static uint16_t dnsmsg_get_id(uint8_t *msg, int msglen)
+static inline uint16_t dnsmsg_id_get(uint8_t *msg, int msglen)
 {
 	return *(uint16_t *)msg;
 }
 
-static void dnsmsg_set_id(uint8_t *msg, int msglen, uint16_t nid)
+static inline void dnsmsg_id_set(uint8_t *msg, int msglen, uint16_t nid)
 {
 	*(uint16_t *)msg = nid;
 }
 
-static uint16_t dnsmsg_alloc_id(struct tcpsock *tcpsock)
+static uint16_t dnsmsg_id_alloc(struct tcpsock *tcpsock)
 {
 	tcpsock->reqid += 1;
 	return (uint16_t)tcpsock->reqid;
@@ -221,7 +221,7 @@ static int staging_dnssession(struct dnssession *sess)
 	uint64_t estimate = ~(uint64_t)0;
 	int i;
 
-	for (i = 0; i < ntcpsocks; i++) {
+	for (i = 0; i < num_tcpsocks; i++) {
 		struct tcpsock *tcpsock = &tcpsocks[i];
 		uint64_t cur_estimate, cur_estimate_threshold;
 		if (tcpsock->state != TCPSOCK_STATE_CONNECTED) {
@@ -230,7 +230,7 @@ static int staging_dnssession(struct dnssession *sess)
 		cur_estimate = tcpsock_estimate(tcpsock);
 		cur_estimate_threshold = tcpsock_estimate_threshold(tcpsock);
 		if (cur_estimate > cur_estimate_threshold) {
-			reinit_tcpsock(tcpsock, TCPSOCK_STATE_SHODDY);
+			tcpsock_refresh(tcpsock, TCPSOCK_STATE_SHODDY);
 			continue;
 		}
 		if (estimate > cur_estimate) {
@@ -283,7 +283,7 @@ static struct dnssession *readreq(int udpsock)
 		error("recevied message too small: %d < %d\n", msglen, DNSMSG_MIN_LEN);
 	} else {
 		sess->reqlen = msglen;
-		sess->reqid = dnsmsg_get_id(buf, msglen);
+		sess->reqid = dnsmsg_id_get(buf, msglen);
 		gettime(&sess->arrival_time);
 		debug("got valid request.\n");
 		return sess;
@@ -308,8 +308,8 @@ static void writereq(struct ustream *s, struct dnssession *sess)
 
 	/* msg */
 	tcpsock = tcpsock_from_ustream(s);
-	sess->reqid2 = reqid2 = dnsmsg_alloc_id(tcpsock);
-	dnsmsg_set_id(msg + 2, msglen, reqid2);
+	sess->reqid2 = reqid2 = dnsmsg_id_alloc(tcpsock);
+	dnsmsg_id_set(msg + 2, msglen, reqid2);
 	ustream_write(s, (char *)msg, msglen + 2, false);
 	tcpsock->stats.total_sent += msglen + 2;
 
@@ -340,7 +340,7 @@ static struct dnssession *readresp(struct ustream *s)
 		ustream_read(s, (char *)sess->respbuf, 2);
 		sess->resplen = ntohs(*(uint16_t *)sess->respbuf);
 		if (sess->resplen < DNSMSG_MIN_LEN || sess->resplen > sizeof(sess->respbuf)) {
-			reinit_tcpsock(tcpsock, TCPSOCK_STATE_SHODDY);
+			tcpsock_refresh(tcpsock, TCPSOCK_STATE_SHODDY);
 			error("got vicious response from %s:%s.\n", tcpsock->saddr, tcpsock->sport);
 			return NULL;
 		}
@@ -357,7 +357,7 @@ static struct dnssession *readresp(struct ustream *s)
 		uint64_t oldavg;
 		int oldserved;
 		if (sess->reqid2 != respid) {
-			reinit_tcpsock(tcpsock, TCPSOCK_STATE_CLOSED);
+			tcpsock_refresh(tcpsock, TCPSOCK_STATE_CLOSED);
 			error("response with unmatch id (%hu, %hu) from %s:%s.\n",
 					sess->reqid2, respid, tcpsock->saddr, tcpsock->sport);
 			return NULL;
@@ -390,7 +390,7 @@ static int writeresp(int udpsock, struct dnssession *sess)
 	msg = sess->respbuf;
 	msglen = sess->resplen;
 
-	dnsmsg_set_id(msg, msglen, sess->reqid);
+	dnsmsg_id_set(msg, msglen, sess->reqid);
 	writelen = sendto(udpsock, msg, msglen, 0,
 			(struct sockaddr *)&sess->srcaddr, sizeof(sess->srcaddr));
 	if (writelen < 0) {
@@ -489,7 +489,7 @@ static void cb_tcpsock_reconnect(struct uloop_timeout *timeout)
 {
 	struct tcpsock *tcpsock = tcpsock_from_reconnect(timeout);
 
-	if (init_tcpsock(tcpsock, NULL) < 0) {
+	if (tcpsock_init(tcpsock, NULL) < 0) {
 		if (tcpsock->reconnect_delay < max_reconnect_delay) {
 			tcpsock->reconnect_delay *= 2;
 		} else {
@@ -512,10 +512,10 @@ static void tcpsock_notify_state(struct ustream *s)
 				s->eof, s->write_error);
 	}
 
-	reinit_tcpsock(tcpsock, TCPSOCK_STATE_CLOSED);
+	tcpsock_refresh(tcpsock, TCPSOCK_STATE_CLOSED);
 }
 
-static void reinit_tcpsock(struct tcpsock *tcpsock, int state)
+static void tcpsock_refresh(struct tcpsock *tcpsock, int state)
 {
 	struct dnssession *p, *n;
 	struct list_head *staging = &tcpsock->list;
@@ -534,15 +534,15 @@ static void reinit_tcpsock(struct tcpsock *tcpsock, int state)
 		/* reconnect */
 		uloop_timeout_set(&tcpsock->reconnect, tcpsock->reconnect_delay);
 	} else {
-		shoddy_tcpsocks += 1;
-		if (shoddy_tcpsocks >= ntcpsocks) {
+		num_tcpsocks_shoddy += 1;
+		if (num_tcpsocks_shoddy >= num_tcpsocks) {
 			error("quit: all servers are marked shoddy.");
 			exit(1);
 		}
 	}
 }
 
-static void init_udpsock(char *saddrport)
+static void udpsock_init(char *saddrport)
 {
 	char *saddr, *sport;
 	int fd;
@@ -560,7 +560,7 @@ static void init_udpsock(char *saddrport)
 	uloop_fd_add(&udpsock, ULOOP_READ | ULOOP_ERROR_CB);
 }
 
-static int init_tcpsock(struct tcpsock *tcpsock, char *saddrport)
+static int tcpsock_init(struct tcpsock *tcpsock, char *saddrport)
 {
 	int fd;
 	char *sremoteaddr, *sremoteport;
@@ -628,7 +628,7 @@ static void cb_sighup(int signum)
 
 	gettime(&curtime);
 	rawinfo("== SIGUSR1 received, statistics follows\n");
-	for (i = 0; i < ntcpsocks; i++) {
+	for (i = 0; i < num_tcpsocks; i++) {
 		struct tcpsock *tcpsock = &tcpsocks[i];
 		int wbuf = ustream_pending_data(&tcpsock->ufd.stream, true);
 		int rbuf = ustream_pending_data(&tcpsock->ufd.stream, false);
@@ -679,13 +679,13 @@ int main(int argc, char *argv[])
 	while ((opt = getopt(argc, argv, "s:l:t:T:qh")) != -1) {
 		switch (opt) {
 		case 's':
-			if (ntcpsocks >= NSERVERS) {
+			if (num_tcpsocks >= NSERVERS) {
 				error("more than %d upstream DNS servers is not allowed.\n", NSERVERS);
 				exit(EXIT_FAILURE);
 			}
-			tcpsock = &tcpsocks[ntcpsocks];
-			if (!init_tcpsock(tcpsock, optarg)) {
-				ntcpsocks += 1;
+			tcpsock = &tcpsocks[num_tcpsocks];
+			if (!tcpsock_init(tcpsock, optarg)) {
+				num_tcpsocks += 1;
 			}
 			break;
 		case 'l':
@@ -693,7 +693,7 @@ int main(int argc, char *argv[])
 				error("multiple -l options are not allowed.\n");
 				exit(EXIT_FAILURE);
 			}
-			init_udpsock(optarg);
+			udpsock_init(optarg);
 			udpinited = 1;
 			break;
 		case 't':
@@ -726,7 +726,7 @@ int main(int argc, char *argv[])
 		usage();
 		exit(EXIT_FAILURE);
 	}
-	if (ntcpsocks <= 0) {
+	if (num_tcpsocks <= 0) {
 		error("no usable TCP server.\n");
 		exit(EXIT_FAILURE);
 	}
