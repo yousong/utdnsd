@@ -105,6 +105,7 @@ const char *progname;
 int quiet;
 struct tcpsock tcpsocks[NSERVERS];
 int ntcpsocks;
+int shoddy_tcpsocks;
 
 struct uloop_fd udpsock;
 LIST_HEAD(list_dnssession_done);
@@ -530,7 +531,14 @@ static void reinit_tcpsock(struct tcpsock *tcpsock, int state)
 	close(tcpsock->ufd.fd.fd);
 
 	if (state != TCPSOCK_STATE_SHODDY) {
+		/* reconnect */
 		uloop_timeout_set(&tcpsock->reconnect, tcpsock->reconnect_delay);
+	} else {
+		shoddy_tcpsocks += 1;
+		if (shoddy_tcpsocks >= ntcpsocks) {
+			error("quit: all servers are marked shoddy.");
+			exit(1);
+		}
 	}
 }
 
