@@ -563,9 +563,11 @@ static void udpsock_init(char *saddrport)
 static int tcpsock_init(struct tcpsock *tcpsock, char *saddrport)
 {
 	int fd;
+	bool reconnect = true;
 	char *sremoteaddr, *sremoteport;
 
 	if (saddrport) {
+		reconnect = false;
 		fill_dnsaddr(saddrport, &sremoteaddr, &sremoteport);
 		tcpsock->saddr = sremoteaddr;
 		tcpsock->sport = sremoteport;
@@ -576,7 +578,7 @@ static int tcpsock_init(struct tcpsock *tcpsock, char *saddrport)
 
 	fd = usock(USOCK_TCP, sremoteaddr, sremoteport);
 	if (fd < 0) {
-		warn("%s to %s:%s failed.\n", !saddrport ? "reconnect" : "connect",
+		warn("%s to %s:%s failed.\n", reconnect ? "reconnect" : "connect",
 				sremoteaddr, sremoteport);
 		return -1;
 	} else {
@@ -591,16 +593,17 @@ static int tcpsock_init(struct tcpsock *tcpsock, char *saddrport)
 				sremoteaddr, sremoteport);
 	}
 
+	if (!reconnect) {
+		tcpsock->reconnect.cb = cb_tcpsock_reconnect;
+		tcpsock->ufd.stream.notify_read = tcpsock_notify_read;
+		tcpsock->ufd.stream.notify_write = tcpsock_notify_write;
+		tcpsock->ufd.stream.notify_state = tcpsock_notify_state;
+	}
 	srandom(random() ^ (long)&saddrport);
 	tcpsock->reqid = random();
-	tcpsock->reconnect.cb = cb_tcpsock_reconnect;
 	tcpsock->reconnect_delay = 500;
 	tcpsock->state = TCPSOCK_STATE_CONNECTED;
 	tcpsock->stats.avg_wait_time = 0;
-
-	tcpsock->ufd.stream.notify_read = tcpsock_notify_read;
-	tcpsock->ufd.stream.notify_write = tcpsock_notify_write;
-	tcpsock->ufd.stream.notify_state = tcpsock_notify_state;
 	ustream_fd_init(&tcpsock->ufd, fd);
 	INIT_LIST_HEAD(&tcpsock->list);
 
