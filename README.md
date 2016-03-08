@@ -14,6 +14,8 @@ To configure the build (mainly the `DEBUG` option).
 
 	ccmake .
 
+Or you can use [build-scripts](https://github.com/yousong/build-scripts)
+
 ## Run.
 
 When run without arguments, help text will be printed to stderr.
