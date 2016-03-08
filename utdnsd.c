@@ -25,7 +25,7 @@
 #define __log(fmt, ...)	do {						\
 	fprintf(stderr, fmt, ##__VA_ARGS__);				\
 } while (0)
-#define _log(level, fmt, ...)	do {					\
+#define _log(level, fmt, ...)	do {	\
 	if (!quiet)							\
 		__log(level debugfmt fmt, debugargs, ##__VA_ARGS__);	\
 } while (0)
@@ -38,12 +38,12 @@
 
 #ifdef DEBUG
 # define debug(fmt, ...)	_log("debug: ", fmt, ##__VA_ARGS__)
-# define debugfmt		"%s:%d: "
-# define debugargs		__func__, __LINE__
+# define debugfmt			"%s:%d: "
+# define debugargs			__func__, __LINE__
 #else
 # define debug(fmt, ...)
-# define debugfmt		"%s"
-# define debugargs		""
+# define debugfmt			"%s"
+# define debugargs			""
 #endif
 
 #ifndef __unused
@@ -53,23 +53,23 @@
 #define SEC2USEC	1000000
 #define NSEC2USEC	1000
 
-#define DNSMSG_MIN_LEN		12
-#define BUFSIZ_DNS		512
-#define BUFSIZ_DNS_TCP		(BUFSIZ_DNS + 2)
-#define NSERVERS		8				/* current default max upstream servers */
-#define TCP_RECONNECT_DELAY	5000				/* milliseconds */
-#define TCP_SHODDY_THRESHOLD	(5 * SEC2USEC)			/* microseconds */
+#define DNSMSG_MIN_LEN			12
+#define BUFSIZ_DNS				512
+#define BUFSIZ_DNS_TCP			(BUFSIZ_DNS + 2)
+#define NSERVERS				8					/* current default max upstream servers */
+#define TCP_RECONNECT_DELAY		5000				/* milliseconds */
+#define TCP_SHODDY_THRESHOLD	(5 * SEC2USEC)		/* microseconds */
 struct dnssession {
-	struct list_head	list;
+	struct list_head		list;
 	struct sockaddr_storage	srcaddr;
-	uint8_t			reqbuf[BUFSIZ_DNS_TCP];
-	int			reqlen;
-	uint16_t		reqid;		/* BE reqid by client */
-	uint16_t		reqid2;		/* BE reqid allocated by tcpsock */
-	uint8_t			respbuf[BUFSIZ_DNS_TCP];
-	int			resplen;
-	int			respdata_len;	/* length of respbuf received */
-	uint64_t		arrival_time;
+	uint8_t					reqbuf[BUFSIZ_DNS_TCP];
+	int						reqlen;
+	uint16_t				reqid;					/* BE reqid by client */
+	uint16_t				reqid2;					/* BE reqid allocated by tcpsock */
+	uint8_t					respbuf[BUFSIZ_DNS_TCP];
+	int						resplen;
+	int						respdata_len;			/* length of respbuf received */
+	uint64_t				arrival_time;
 };
 
 enum {
@@ -81,28 +81,28 @@ enum {
 
 struct stats {
 	long			num_served_sessions;
-	long			total_sent;		/* bytes sent */
+	long			total_sent;			/* bytes sent */
 	long			total_received;		/* bytes received */
 	long			num_reconnect;
 	uint64_t		avg_wait_time;
 };
 
 struct tcpsock {
-	struct list_head	list;		/* dns req sent */
-	struct list_head	list_wait;	/* dns req received while in disconnected state */
-	struct dnssession	*cur_sess;	/* current ses on readresp */
-	int			nsess;
-	struct ustream_fd	ufd;
+	struct list_head		list;		/* dns req sent */
+	struct list_head		list_wait;	/* dns req received while in disconnected state */
+	struct dnssession		*cur_sess;	/* current ses on readresp */
+	int						nsess;
+	struct ustream_fd		ufd;
 	struct uloop_timeout	timeout_reconnect;
 	struct uloop_timeout	timeout_connect;
-	unsigned long		reconnect_delay;
-	char			*saddr;
-	char			*sport;
-	int			state;
-	unsigned long		reqid;	/* reqid seed */
-	struct stats		stats;
+	unsigned long			reconnect_delay;
+	char					*saddr;
+	char					*sport;
+	int						state;
+	unsigned long			reqid;		/* reqid seed */
+	struct stats			stats;
 };
-#define tcpsock_from_ustream(s)		container_of(s, struct tcpsock, ufd.stream)
+#define tcpsock_from_ustream(s)			container_of(s, struct tcpsock, ufd.stream)
 #define tcpsock_from_reconnect(timeout)	container_of(timeout, struct tcpsock, timeout_reconnect)
 
 
@@ -115,9 +115,9 @@ int num_tcpsocks_shoddy;
 struct uloop_fd udpsock;
 LIST_HEAD(list_dnssession_done);
 
-int max_reconnect_delay = TCP_RECONNECT_DELAY;
+int max_reconnect_delay       = TCP_RECONNECT_DELAY;
 uint64_t tcp_shoddy_threshold = TCP_SHODDY_THRESHOLD;
-bool reconnect_on_demand = true;
+bool reconnect_on_demand      = true;
 
 static int tcpsock_init(struct tcpsock *tcpsock, char *saddrport);
 static void tcpsock_refresh(struct tcpsock *tcpsock, int state);
@@ -255,9 +255,9 @@ static struct tcpsock *_find_least_occupied_disconnected(struct dnssession *sess
 	for (i = 0; i < num_tcpsocks; i++) {
 		struct tcpsock *tcpsock = &tcpsocks[i];
 		if (ans == NULL)
-		    ans = tcpsock;
+			ans = tcpsock;
 		else if (ans->nsess > tcpsock->nsess)
-		    ans = tcpsock;
+			ans = tcpsock;
 	}
 	if (ans->state == TCPSOCK_STATE_CLOSED)
 		if (tcpsock_init(ans, NULL) < 0)
@@ -279,11 +279,11 @@ static int staging_dnssession(struct dnssession *sess)
 	}
 
 	if (ans->state == TCPSOCK_STATE_CONNECTED) {
-	    writereq(&ans->ufd.stream, sess);
-	    list_add_tail(&sess->list, &ans->list);
+		writereq(&ans->ufd.stream, sess);
+		list_add_tail(&sess->list, &ans->list);
 	}
 	else
-	    list_add_tail(&sess->list, &ans->list_wait);
+		list_add_tail(&sess->list, &ans->list_wait);
 	ans->nsess += 1;
 	return 0;
 }
@@ -372,43 +372,43 @@ static struct dnssession *readresp(struct ustream *s)
 		return NULL;
 	}
 	if (!tcpsock->cur_sess) {
-	    if (available < 4)
-		return NULL;
-	    else {
-		struct {
+		if (available < 4)
+			return NULL;
+		else {
+			struct {
+				uint16_t len;
+				uint16_t xid;
+			} h;
 			uint16_t len;
 			uint16_t xid;
-		} h;
-		uint16_t len;
-		uint16_t xid;
-		struct dnssession *p, *n;
+			struct dnssession *p, *n;
 
-		ustream_read(s, (char *)&h, 4);
-		len = ntohs(h.len);
-		xid = h.xid;
-		if (len < DNSMSG_MIN_LEN || len > BUFSIZ_DNS_TCP) {
-			tcpsock_refresh(tcpsock, TCPSOCK_STATE_SHODDY);
-			error("bad resplen %d from %s:%s\n", len, tcpsock->saddr, tcpsock->sport);
-			return NULL;
+			ustream_read(s, (char *)&h, 4);
+			len = ntohs(h.len);
+			xid = h.xid;
+			if (len < DNSMSG_MIN_LEN || len > BUFSIZ_DNS_TCP) {
+				tcpsock_refresh(tcpsock, TCPSOCK_STATE_SHODDY);
+				error("bad resplen %d from %s:%s\n", len, tcpsock->saddr, tcpsock->sport);
+				return NULL;
+			}
+			list_for_each_entry_safe(p, n, &tcpsock->list, list) {
+				if (p->reqid2 == xid) {
+					tcpsock->cur_sess = sess = p;
+					sess->resplen = len;
+					sess->reqid2 = xid;
+					memcpy(sess->respbuf, &xid, 2);
+					sess->respdata_len = 2;
+					break;
+				}
+			}
+			if (!tcpsock->cur_sess) {
+				tcpsock_refresh(tcpsock, TCPSOCK_STATE_SHODDY);
+				error("cannot find sess with id %hx\n", xid);
+				return NULL;
+			}
 		}
-		list_for_each_entry_safe(p, n, &tcpsock->list, list) {
-		    if (p->reqid2 == xid) {
-			tcpsock->cur_sess = sess = p;
-			sess->resplen = len;
-			sess->reqid2 = xid;
-			memcpy(sess->respbuf, &xid, 2);
-			sess->respdata_len = 2;
-			break;
-		    }
-		}
-		if (!tcpsock->cur_sess) {
-			tcpsock_refresh(tcpsock, TCPSOCK_STATE_SHODDY);
-			error("cannot find sess with id %hx\n", xid);
-			return NULL;
-		}
-	    }
 	} else
-	    sess = tcpsock->cur_sess;
+		sess = tcpsock->cur_sess;
 
 	buf = sess->respbuf + sess->respdata_len;
 	buflen = sess->resplen - sess->respdata_len;
@@ -632,16 +632,16 @@ static void cb_tcpsock_connected(struct uloop_fd *fd, unsigned int events)
 
 fail:
 	if (!fail)
-	    tcpsock->state = TCPSOCK_STATE_CONNECTED;
+		tcpsock->state = TCPSOCK_STATE_CONNECTED;
 	else
-	    tcpsock->state = TCPSOCK_STATE_CLOSED;
+		tcpsock->state = TCPSOCK_STATE_CLOSED;
 	list_for_each_entry_safe(p, n, &tcpsock->list_wait, list) {
 		if (!fail) {
-		    writereq(&tcpsock->ufd.stream, p);
-		    list_move_tail(&p->list, &tcpsock->list);
+			writereq(&tcpsock->ufd.stream, p);
+			list_move_tail(&p->list, &tcpsock->list);
 		} else {
-		    list_del(&p->list);
-		    free(p);
+			list_del(&p->list);
+			free(p);
 		}
 	}
 }
