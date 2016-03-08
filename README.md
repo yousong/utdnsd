@@ -18,14 +18,14 @@ To configure the build (mainly the `DEBUG` option).
 
 When run without arguments, help text will be printed to stderr.
 
-	yousong@yousongs-MacBook-Air:~/dev/utdnsd$ ./utdnsd 
-	Usage: utdnsd [ -qh ] -l <host[:port]> [ -s <host[:port]> ... ] [ -t <seconds> ]
-	  -l <host[:port]>  Address and port to listen to.
-	  -s <host[:port]>  Upstream DNS server we ask for service through TCP transport.
-	  -t <seconds>      Maximum delay for reconnect attempts (defaults to 5s).
-	  -T <seconds>      Maximum delay before the link was considered shoddy (defaults to 5s).
-	  -q                Be quiet.
-	  -h                This output.
+    Usage: utdnsd [ -qrh ] -l <host[:port]> [ -s <host[:port]> ... ] [ -t <seconds> ]
+      -l <host[:port]>  Address and port to listen to.
+      -s <host[:port]>  Upstream DNS server we ask for service through TCP transport.
+      -t <seconds>      Maximum delay for reconnect attempts (defaults to 5s).
+      -T <seconds>      Maximum delay before the link was considered shoddy (defaults to 5s).
+      -r                Reconnect on tcp connection hup.
+      -q                Be quiet.
+      -h                This output.
 
 Currently, at most 8 `-s <host:[port]>` can be specified on the command line.  Same upstream server can be specified multiple times with the `-s` option.
 
@@ -62,10 +62,6 @@ Below are some different strategies or situations I came across while doing test
 
 		114.114.114.114
 
-- EOF at EOC (end of connection).  But at least one request can be served before that `RST`.  Not sure the strategy is from the original DNS service provider, or some intermediate firewall thingy.
-
-		8.8.8.8
-
 - Only 1 connection per IP (this is a guess), other connections may hang or delay with `ACK`, `ACK`, ...
 
 ## Tips
@@ -99,19 +95,6 @@ Test it with `dig`, `nslookup`.
 ## TODO
 
 - A list of domain names from browser history for testing purposes.
-- Workaround the issue with `8.8.8.8`.
-
-	- Add a global staging area for requests that cannot be served immediately.
-	- Move interrupted sessions to the staging area.
-	- Serve that staging area once reconnect is successful.
-
-	The problem being when and how much to write staged requests?
-
-	- ALL?
-	- Add a uloop for writable TCP fd monitor.
-
-- When to stop reading in requests and do the actual service.
-- More than NSERVERS upstream TCP servers and HEAP style.
 
 ## Resources
 
@@ -124,7 +107,6 @@ Test it with `dig`, `nslookup`.
 
 - dnsperf, http://nominum.com/measurement-tools/
 - DNS benchmark tool for Windows, https://www.grc.com/dns/benchmark.htm
-- Public DNS Server List, http://public-dns.tk/
 - Public DNS services
 	- Google DNS
 	- OpenDNS
