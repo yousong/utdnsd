@@ -7,6 +7,7 @@
 #include <signal.h>			/* signal() */
 #include <sys/time.h>			/* struct timeval, */
 #include <pwd.h>			/* struct passwd, getpwnam() */
+#include <inttypes.h>
 
 #include <stdio.h>			/* fprintf() */
 #include <stdlib.h>			/* srandom(), random(), exit(), strtoul() */
@@ -374,15 +375,17 @@ static struct dnssession *readresp(struct ustream *s)
 	    if (available < 4)
 		return NULL;
 	    else {
-		uint32_t h;
+		struct {
+			uint16_t len;
+			uint16_t xid;
+		} h;
 		uint16_t len;
 		uint16_t xid;
 		struct dnssession *p, *n;
 
 		ustream_read(s, (char *)&h, 4);
-		len = *(uint16_t *)&h;
-		len = ntohs(len);
-		xid = *(((uint16_t *)&h) + 1);
+		len = ntohs(h.len);
+		xid = h.xid;
 		if (len < DNSMSG_MIN_LEN || len > BUFSIZ_DNS_TCP) {
 			tcpsock_refresh(tcpsock, TCPSOCK_STATE_SHODDY);
 			error("bad resplen %d from %s:%s\n", len, tcpsock->saddr, tcpsock->sport);
@@ -393,7 +396,7 @@ static struct dnssession *readresp(struct ustream *s)
 			tcpsock->cur_sess = sess = p;
 			sess->resplen = len;
 			sess->reqid2 = xid;
-			*(uint16_t *)sess->respbuf = xid;
+			memcpy(sess->respbuf, &xid, 2);
 			sess->respdata_len = 2;
 			break;
 		    }
@@ -413,11 +416,12 @@ static struct dnssession *readresp(struct ustream *s)
 	sess->respdata_len += readlen;
 
 	if (sess->respdata_len == sess->resplen) {
-		uint16_t respid = *(uint16_t *)sess->respbuf;
+		uint16_t respid;
 		uint64_t curtime;
 		uint64_t oldavg;
 		int oldserved;
 
+		memcpy(&respid, sess->respbuf, 2);
 		tcpsock->cur_sess = NULL;
 		if (sess->reqid2 != respid) {
 			tcpsock_refresh(tcpsock, TCPSOCK_STATE_CLOSED);
@@ -766,7 +770,7 @@ static void cb_sighup(int signum)
 		struct tcpsock *tcpsock = &tcpsocks[i];
 		int wbuf = ustream_pending_data(&tcpsock->ufd.stream, true);
 		int rbuf = ustream_pending_data(&tcpsock->ufd.stream, false);
-		rawinfo("> %15s:%-4s state:%d reconn:%-3ld served:%-5ld staging:%-3d estimate:%-2lld wbuf:%-3d rbuf:%-3d sent:%-8ld recv:%-8ld\n",
+		rawinfo("> %15s:%-4s state:%d reconn:%-3ld served:%-5ld staging:%-3d estimate:%-2" PRIu64 " wbuf:%-3d rbuf:%-3d sent:%-8ld recv:%-8ld\n",
 				tcpsock->saddr, tcpsock->sport, tcpsock->state, tcpsock->stats.num_reconnect,
 				tcpsock->stats.num_served_sessions, tcpsock->nsess,
 				tcpsock_estimate(tcpsock) / SEC2USEC,
