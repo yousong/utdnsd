@@ -51,6 +51,9 @@ class ReportThread(threading.Thread):
         self.finished_wait = 0
 
     def report(self):
+        if self.total == 0 or self.finished == 0:
+            print 'total: %d, finished: %d' % (self.total, self.finished)
+            return
         timeout = self.total - self.finished
         avg_wait = self.total_wait / self.total
         avg_finished_wait = self.finished_wait / self.finished
