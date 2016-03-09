@@ -16,36 +16,6 @@ class Result(object):
         self.ans = ans
         self.elapsed = elapsed
 
-def summerize(q):
-    rs = []
-    while not q.empty():
-        rs.append(q.get())
-    if len(rs) == 0:
-        return
-    total = len(rs)
-    finished = len([r for r in rs if r.ans is not None])
-    timeout = total - finished
-    total_wait = sum([r.elapsed for r in rs])
-    finished_wait = sum([r.elapsed for r in rs if r.ans is not None])
-    timeout_wait = total_wait - finished_wait
-    avg_wait = total_wait / total
-    avg_finished_wait = finished_wait / finished
-    summary = (
-   '            total: %(total)d\n'
-   '         finished: %(finished)d\n'
-   '          timeout: %(timeout)d\n'
-   '         avg_wait: %(avg_wait).3f\n'
-   'avg_finished_wait: %(avg_finished_wait).3f\n'
-    )
-    summary = summary % {
-        'total': total,
-        'finished': finished,
-        'timeout': timeout,
-        'avg_wait': avg_wait,
-        'avg_finished_wait': avg_finished_wait,
-    }
-    print summary
-
 
 class QueryThread(threading.Thread):
     def __init__(self, q, r, *args, **kwargs):
@@ -71,6 +41,52 @@ class QueryThread(threading.Thread):
                 res = Result(query, ans, elapsed)
                 self.r.put(res)
 
+class ReportThread(threading.Thread):
+    def __init__(self, r, *args, **kwargs):
+        super(ReportThread, self).__init__(*args, **kwargs)
+        self.r = r
+        self.total = 0
+        self.finished = 0
+        self.total_wait = 0
+        self.finished_wait = 0
+
+    def report(self):
+        timeout = self.total - self.finished
+        avg_wait = self.total_wait / self.total
+        avg_finished_wait = self.finished_wait / self.finished
+        report = (
+       '            total: %(total)d\n'
+       '         finished: %(finished)d\n'
+       '          timeout: %(timeout)d\n'
+       '         avg_wait: %(avg_wait).3f\n'
+       'avg_finished_wait: %(avg_finished_wait).3f\n'
+        )
+        report = report % {
+            'total': self.total,
+            'finished': self.finished,
+            'timeout': timeout,
+            'avg_wait': avg_wait,
+            'avg_finished_wait': avg_finished_wait,
+        }
+        print report
+
+    def run(self):
+        global stop
+        while True:
+            try:
+                r = self.r.get(True, 1)
+            except Queue.Empty:
+                if stop:
+                    self.report()
+                    break
+                else:
+                    continue
+            self.total += 1
+            self.total_wait += r.elapsed
+            if r.ans is not None:
+                self.finished += 1
+                self.finished_wait += r.elapsed
+
 class UtdnsdThread(threading.Thread):
     pass
 
@@ -84,6 +100,7 @@ domains = (
     'www.amazon.com',
     'aws.amazon.com',
     'www.openvpn.net',
+    'unix.stackexchange.com',
 )
 
 stop = False
@@ -92,18 +109,20 @@ def sighand(signum, frame):
     stop = True
 
 if __name__ == '__main__':
-    numthreads = 10
+    numthreads = 7
     q = Queue.Queue(maxsize=numthreads * 2)
     r = Queue.Queue()
-    ts = [QueryThread(q, r) for i in range(numthreads)]
-    for t in ts:
+    qts = [QueryThread(q, r) for i in range(numthreads)]
+    st = ReportThread(r)
+    for t in qts:
         t.start()
+    st.start()
 
     signal.signal(signal.SIGINT, sighand)
     for domain in itertools.cycle(domains):
         if stop:
             break
         q.put(domain)
-    for t in ts:
+    for t in qts:
         t.join()
-    summerize(r)
+    st.join()
