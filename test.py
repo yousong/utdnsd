@@ -3,6 +3,8 @@
 import threading
 import Queue
 import time
+import signal
+import itertools
 # requires dnspython
 import dns.exception
 import dns.query
@@ -54,7 +56,7 @@ class QueryThread(threading.Thread):
     def run(self):
         while True:
             try:
-                domain = self.q.get(True, 2)
+                domain = self.q.get(True, 1)
             except Queue.Empty:
                 break
             query = dns.message.make_query(domain, dns.rdatatype.A)
@@ -72,22 +74,36 @@ class QueryThread(threading.Thread):
 class UtdnsdThread(threading.Thread):
     pass
 
+domains = (
+    'www.baidu.com',
+    'www.twitter.com',
+    'www.facebook.com',
+    'www.vimeo.com',
+    'mail.google.com',
+    'www.google.com',
+    'www.amazon.com',
+    'aws.amazon.com',
+    'www.openvpn.net',
+)
+
+stop = False
+def sighand(signum, frame):
+    global stop
+    stop = True
+
 if __name__ == '__main__':
-    q = Queue.Queue()
+    numthreads = 10
+    q = Queue.Queue(maxsize=numthreads * 2)
     r = Queue.Queue()
-    ts = [QueryThread(q, r) for i in range(10)]
+    ts = [QueryThread(q, r) for i in range(numthreads)]
     for t in ts:
         t.start()
-    for i in range(10):
-        q.put('www.baidu.com')
-        q.put('www.twitter.com')
-        q.put('www.facebook.com')
-        q.put('www.vimeo.com')
-        q.put('mail.google.com')
-        q.put('www.google.com')
-        q.put('www.amazon.com')
-        q.put('aws.amazon.com')
-        q.put('www.openvpn.net')
+
+    signal.signal(signal.SIGINT, sighand)
+    for domain in itertools.cycle(domains):
+        if stop:
+            break
+        q.put(domain)
     for t in ts:
         t.join()
     summerize(r)
