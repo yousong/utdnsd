@@ -1,3 +1,6 @@
+#
+# Copyright 2015-2016 (c) Yousong Zhou
+#
 cmake_minimum_required(VERSION 2.6)
 project(utdnsd C)
 

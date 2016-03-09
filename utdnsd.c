@@ -1,3 +1,6 @@
+//
+// Copyright 2015-2016 (c) Yousong Zhou
+//
 #include <sys/types.h>			/* struct sockaddr_storage */
 #include <sys/socket.h>			/* struct sockaddr_storage */
 #include <arpa/inet.h>			/* htons(), ntohs() */
@@ -310,6 +313,7 @@ static struct dnssession *readreq(int udpsock)
 	msglen = recvfrom(udpsock, buf, buflen, 0,
 		(struct sockaddr *)&sess->srcaddr, &addrlen);
 	if (msglen < 0) {
+		// we can remember this malloc for next use
 		if (errno == EAGAIN || errno == EINTR)
 			goto out;
 		error("recvfrom: %s\n", strerror(errno));

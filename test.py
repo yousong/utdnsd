@@ -1,5 +1,7 @@
 #!/usr/bin/env python
-
+#
+# Copyright 2015-2016 (c) Yousong Zhou
+#
 import threading
 import Queue
 import time
