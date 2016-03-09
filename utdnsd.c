@@ -83,7 +83,7 @@ struct stats {
 	long			num_served_sessions;
 	long			total_sent;			/* bytes sent */
 	long			total_received;		/* bytes received */
-	long			num_reconnect;
+	long			num_connect;
 	uint64_t		avg_wait_time;
 };
 
@@ -566,7 +566,6 @@ static void cb_tcpsock_reconnect(struct uloop_timeout *timeout)
 	} else {
 		tcpsock->reconnect_delay = 500;
 	}
-	tcpsock->stats.num_reconnect += 1;
 }
 
 static void tcpsock_notify_state(struct ustream *s)
@@ -703,6 +702,7 @@ static int tcpsock_init(struct tcpsock *tcpsock, char *saddrport)
 	}
 
 	fd = usock(USOCK_TCP | USOCK_NONBLOCK, sremoteaddr, sremoteport);
+	tcpsock->stats.num_connect += 1;
 	if (fd < 0) {
 		warn("%s to %s:%s failed.\n", reconnect ? "reconnect" : "connect",
 				sremoteaddr, sremoteport);
@@ -765,8 +765,8 @@ static void cb_sighup(int signum)
 		struct tcpsock *tcpsock = &tcpsocks[i];
 		int wbuf = ustream_pending_data(&tcpsock->ufd.stream, true);
 		int rbuf = ustream_pending_data(&tcpsock->ufd.stream, false);
-		rawinfo("> %15s:%-4s state:%d reconn:%-3ld served:%-5ld staging:%-3d estimate:%-2" PRIu64 " wbuf:%-3d rbuf:%-3d sent:%-8ld recv:%-8ld\n",
-				tcpsock->saddr, tcpsock->sport, tcpsock->state, tcpsock->stats.num_reconnect,
+		rawinfo("> %15s:%-4s state:%d conn:%-3ld served:%-5ld staging:%-3d estimate:%-2" PRIu64 " wbuf:%-3d rbuf:%-3d sent:%-8ld recv:%-8ld\n",
+				tcpsock->saddr, tcpsock->sport, tcpsock->state, tcpsock->stats.num_connect,
 				tcpsock->stats.num_served_sessions, tcpsock->nsess,
 				tcpsock_estimate(tcpsock) / SEC2USEC,
 				wbuf, rbuf,
