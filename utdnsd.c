@@ -600,16 +600,9 @@ static int tcpsock_ufd_init(struct tcpsock *tcpsock)
 static void cb_tcpsock_timeout_connect_cb(struct uloop_timeout *timeout)
 {
 	struct tcpsock *tcpsock = container_of(timeout, struct tcpsock, timeout_connect);
-	struct uloop_fd *fd = &tcpsock->ufd.fd;
-	struct dnssession *p, *n;
 
 	warn("timeout connecting %s:%s\n", tcpsock->saddr, tcpsock->sport);
-	uloop_fd_delete(fd);
-	close(fd->fd);
-	list_for_each_entry_safe(p, n, &tcpsock->list_wait, list) {
-		list_del(&p->list);
-		free(p);
-	}
+	tcpsock_refresh(tcpsock, TCPSOCK_STATE_CLOSED);
 }
 
 static void cb_tcpsock_connected(struct uloop_fd *fd, unsigned int events)
@@ -631,18 +624,14 @@ static void cb_tcpsock_connected(struct uloop_fd *fd, unsigned int events)
 	fail = false;
 
 fail:
-	if (!fail)
-		tcpsock->state = TCPSOCK_STATE_CONNECTED;
-	else
-		tcpsock->state = TCPSOCK_STATE_CLOSED;
+	if (fail) {
+		tcpsock_refresh(tcpsock, TCPSOCK_STATE_CLOSED);
+		return;
+	}
+	tcpsock->state = TCPSOCK_STATE_CONNECTED;
 	list_for_each_entry_safe(p, n, &tcpsock->list_wait, list) {
-		if (!fail) {
-			writereq(&tcpsock->ufd.stream, p);
-			list_move_tail(&p->list, &tcpsock->list);
-		} else {
-			list_del(&p->list);
-			free(p);
-		}
+		writereq(&tcpsock->ufd.stream, p);
+		list_move_tail(&p->list, &tcpsock->list);
 	}
 }
 
@@ -656,9 +645,15 @@ static void tcpsock_refresh(struct tcpsock *tcpsock, int state)
 		list_del(&p->list);
 		free(p);
 	}
+	list_for_each_entry_safe(p, n, &tcpsock->list_wait, list) {
+		list_del(&p->list);
+		free(p);
+	}
 	tcpsock->nsess = 0;
 	ustream_free(&tcpsock->ufd.stream);
+	uloop_fd_delete(&tcpsock->ufd.fd);
 	close(tcpsock->ufd.fd.fd);
+
 	if (reconnect_on_demand)
 		return;
 
