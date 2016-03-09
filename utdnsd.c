@@ -311,7 +311,7 @@ static struct dnssession *readreq(int udpsock)
 		(struct sockaddr *)&sess->srcaddr, &addrlen);
 	if (msglen < 0) {
 		if (errno == EAGAIN || errno == EINTR)
-			return NULL;
+			goto out;
 		error("recvfrom: %s\n", strerror(errno));
 		exit(EXIT_FAILURE);
 	} else if (msglen == 0) {
@@ -327,6 +327,7 @@ static struct dnssession *readreq(int udpsock)
 		return sess;
 	}
 
+out:
 	free(sess);
 	return NULL;
 }
