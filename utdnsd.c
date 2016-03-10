@@ -5,17 +5,17 @@
 #include <sys/socket.h>			/* struct sockaddr_storage */
 #include <arpa/inet.h>			/* htons(), ntohs() */
 #include <netinet/tcp.h>		/* IPPROTO_TCP, TCP_NODELAY */
-#include <unistd.h>			/* getopt(), getuid(), setuid(), setgid() */
-#include <libgen.h>			/* basename() */
-#include <signal.h>			/* signal() */
+#include <unistd.h>				/* getopt(), getuid(), setuid(), setgid() */
+#include <libgen.h>				/* basename() */
+#include <signal.h>				/* signal() */
 #include <sys/time.h>			/* struct timeval, */
-#include <pwd.h>			/* struct passwd, getpwnam() */
+#include <pwd.h>				/* struct passwd, getpwnam() */
 #include <inttypes.h>
 
-#include <stdio.h>			/* fprintf() */
-#include <stdlib.h>			/* srandom(), random(), exit(), strtoul() */
-#include <string.h>			/* strchr(), strerror() */
-#include <errno.h>			/* errno */
+#include <stdio.h>				/* fprintf() */
+#include <stdlib.h>				/* srandom(), random(), exit(), strtoul() */
+#include <string.h>				/* strchr(), strerror() */
+#include <errno.h>				/* errno */
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -79,7 +79,7 @@ enum {
 	TCPSOCK_STATE_CLOSED,
 	TCPSOCK_STATE_CONNECTING,
 	TCPSOCK_STATE_CONNECTED,
-	TCPSOCK_STATE_SHODDY,		/* No further attempt with the server */
+	TCPSOCK_STATE_SHODDY,				/* No further attempt with the server */
 };
 
 struct stats {
@@ -353,7 +353,6 @@ static void writereq(struct ustream *s, struct dnssession *sess)
 	tcpsock = tcpsock_from_ustream(s);
 	sess->reqid2 = reqid2 = dnsmsg_id_alloc(tcpsock);
 	dnsmsg_id_set(msg + 2, msglen, reqid2);
-	//printf("%s:%s, %d, write %d\n", tcpsock->saddr, tcpsock->sport, tcpsock->nsess, reqid2);
 	ustream_write(s, (char *)msg, msglen + 2, false);
 	tcpsock->stats.total_sent += msglen + 2;
 
@@ -531,7 +530,7 @@ static void cb_uloop_udpsock(struct uloop_fd *fd, unsigned int events)
 		cb_udpsock_readable(udpsockfd);
 	}
 	if (list_empty(&list_dnssession_done)) {
-		/* write out responses */
+		// got no response to write
 		uloop_fd_add(&udpsock, ULOOP_READ | ULOOP_ERROR_CB);
 	}
 }
@@ -541,7 +540,7 @@ static void tcpsock_notify_read(struct ustream *s, int bytes)
 	while (readresp(s)) ;
 
 	if (!list_empty(&list_dnssession_done)) {
-		/* write out responses */
+		/* ready to write out responses */
 		uloop_fd_add(&udpsock, ULOOP_READ | ULOOP_WRITE | ULOOP_ERROR_CB);
 	}
 }
@@ -554,7 +553,6 @@ static void tcpsock_notify_write(struct ustream *s, int bytes)
 			bytes, ustream_pending_data(s, true),
 			tcpsock->saddr, tcpsock->sport);
 	/*FIXME tag me for more */
-	/*struct tcpsock *tcpsock = tcpsock_from_ustream(s);*/
 }
 
 static void cb_tcpsock_reconnect(struct uloop_timeout *timeout)
